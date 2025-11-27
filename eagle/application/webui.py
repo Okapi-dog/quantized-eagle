@@ -280,7 +280,7 @@ model = EaModel.from_pretrained(
     load_in_4bit=args.load_in_4bit,
     load_in_8bit=args.load_in_8bit,
     device_map="auto",
-    use_eagle3=args.no_eagle3,
+    use_eagle3=not args.no_eagle3,
 )
 model.eval()
 warmup(model)

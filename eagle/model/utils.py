@@ -251,7 +251,33 @@ def initialize_tree(input_ids, model, past_key_values, logits_processor):
             outputs["hidden_states"] = [x.to(ea_device) for x in outputs["hidden_states"]]
         hidden_states=torch.cat(outputs["hidden_states"],dim=-1)
     draft_tokens, retrieve_indices,tree_mask,tree_position_ids = model.ea_layer.topK_genrate(hidden_states, input_ids, model.base_model.lm_head,logits_processor)
+    # --- ここからが追加するデバッグコード ---
+    if draft_tokens is not None and hasattr(model, 'tokenizer'):
+        try:
+            print("\n--- [DEBUG] INITIAL Draft Model Proposals (Top-K) ---")
+
+            # (1, N) のような形状を想定。最初の10トークンを表示
+            num_tokens_to_show = 10
+            if draft_tokens.shape[1] >= num_tokens_to_show:
+
+                # 最初のブランチ（主要な候補）を取得
+                candidate_token_ids = draft_tokens[0, :num_tokens_to_show]
+
+                # tokenizer を使ってデコード (model は EaModel インスタンス)
+                decoded_tokens = model.tokenizer.decode(candidate_token_ids, skip_special_tokens=False)
+
+                print(f"Token IDs: {candidate_token_ids.tolist()}")
+                print(f"Decoded:   '{decoded_tokens}'")
+
+            # 1回だけ表示して終了
+            print("--- [DEBUG] Stopping after first proposal. ---")
+            raise Exception("Debug stop")
+
+        except Exception as e:
+            print(f"[DEBUG] Error during token decoding: {e}")
+    # --- デバッグコードここまで ---
     return draft_tokens, retrieve_indices,tree_mask,tree_position_ids, orig, hidden_states, token
+
 
 
 def reset_tree_mode(

@@ -13,7 +13,8 @@ from .modeling_llama_kv import LlamaForCausalLM as KVLlamaForCausalLM
 from .modeling_mixtral_kv import MixtralForCausalLM as KVMixtralForCausalLM
 #from .modeling_qwen2_kv import LlamaForCausalLM as KVQwen2ForCausalLM
 from .modeling_qwen2_kv import Qwen2ForCausalLM as KVQwen2ForCausalLM
-from .modeling_qwen3_kv import Qwen3ForCausalLM as KVQwen3ForCausalLM
+#awq requires transformers=4.46.0 but below program requires use_kernel_forward_from_hub in 4.53.3.     #今はAWQを使わないのでコメントアウト
+#from .modeling_qwen3_kv import Qwen3ForCausalLM as KVQwen3ForCausalLM      #元々のpytorchバージョンでは動くが、今のバージョンでは動かない
 from .utils import *
 from .kv_cache import initialize_past_key_values
 
@@ -248,11 +249,15 @@ class EaModel(nn.Module):
         )
         new_token = 0
         max_length = max_length - self.ea_layer.total_tokens - 10
+        target_forward_time=0
+        draft_forward_time=0
         for idx in range(max_length):
             # with Timer("all"):
             self.base_model.model.tree_mask = tree_mask
 
             draft_tokens = draft_tokens.to(input_ids.device)
+            torch.cuda.synchronize()
+            t0=time.perf_counter()
             # Target model forward, get logits
             logits, hidden_state_new, outputs = tree_decoding(
                 self,
@@ -262,6 +267,8 @@ class EaModel(nn.Module):
                 input_ids,
                 retrieve_indices,
             )
+            torch.cuda.synchronize()
+            target_forward_time+=time.perf_counter()-t0
             # retrieve_indices=tree_buffers["retrieve_indices"]
             # logits = logits[0, retrieve_indices]
             draft_tokens = torch.cat((draft_tokens, padding), dim=1)
@@ -272,6 +279,8 @@ class EaModel(nn.Module):
             )
             # print(accept_length)
             # Adjusting the input sequence, draft model forward
+            torch.cuda.synchronize()
+            t0=time.perf_counter()
             input_ids, draft_tokens, retrieve_indices, tree_mask, tree_position_ids, new_token, hidden_state, sample_token = update_inference_inputs(
                 input_ids,
                 candidates,
@@ -286,6 +295,8 @@ class EaModel(nn.Module):
                 hidden_state_new,
                 sample_p
             )
+            torch.cuda.synchronize()
+            draft_forward_time+=time.perf_counter()-t0
 
             if is_llama3:
                 if stop_token_id in input_ids[0, input_len:].tolist():
@@ -300,7 +311,7 @@ class EaModel(nn.Module):
         if not log:
             return input_ids
         else:
-            return input_ids, new_token, idx
+            return input_ids, new_token, idx, target_forward_time, draft_forward_time
 
     @torch.no_grad()
     def naivegenerate(

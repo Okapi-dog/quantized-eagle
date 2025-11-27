@@ -1,5 +1,8 @@
-torch==2.6.0
+torch==2.7.1 --index-url https://download.pytorch.org/whl/cu126/
+# transformers==4.53.3　awq用
 transformers>=4.53.1
+torchao #量子化用
+#fbgemm-gpu-genai==1.2.0+ --index-url https://download.pytorch.org/whl/cu126/ #量子化用だったが、A100では動かない
 accelerate==0.26.0
 fschat==0.2.31
 gradio==3.50.2
